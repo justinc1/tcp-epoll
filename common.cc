@@ -115,10 +115,10 @@ create_and_connect (char *servername, char *port)
       if (sfd == -1)
         continue;
 
-      s = bind (sfd, rp->ai_addr, rp->ai_addrlen);
+      s = connect (sfd, rp->ai_addr, rp->ai_addrlen);
       if (s == 0)
         {
-          /* We managed to bind successfully! */
+          /* We managed to connect successfully! */
           break;
         }
 
@@ -127,7 +127,7 @@ create_and_connect (char *servername, char *port)
 
   if (rp == NULL)
     {
-      fprintf (stderr, "Could not bind\n");
+      fprintf (stderr, "Could not connect\n");
       return -1;
     }
 

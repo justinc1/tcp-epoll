@@ -187,12 +187,13 @@ main (int argc, char *argv[])
                     }
 
                   /* Write the buffer to standard output */
-                  s = write (1, buf, count);
-                  if (s == -1)
-                    {
-                      perror ("write");
-                      abort ();
-                    }
+                  printf("SRV  recv: %zu %s\n", count, buf);
+
+                    if (buf[5] == 'c')
+                        buf[5] = 's';
+                    ssize_t buflen = strlen(buf) +1 ;
+                  printf("SRV  send: %zu %s\n", buflen, buf);
+                    s = write(events[i].data.fd, buf, buflen);
                 }
 
               if (done)
