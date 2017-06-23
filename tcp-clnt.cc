@@ -31,145 +31,169 @@
 
 #define MAXEVENTS 64
 
+char* epoll_event_to_str(int event) {
+    static char buf[512];
+    memset(buf, 0x00, sizeof(buf));
+    int pos=0;
+    pos += snprintf(buf+pos, sizeof(buf)-pos, "0x%02x EPOLL{", event);
+    if (event & EPOLLIN) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " IN");
+    }
+    if (event & EPOLLOUT) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " OUT");
+    }
+    if (event & EPOLLERR) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " ERR");
+    }
+    if (event & EPOLLHUP) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " HUP");
+    }
+    pos += snprintf(buf+pos, sizeof(buf)-pos, " }");
+    return buf;
+}
+
 int
 main (int argc, char *argv[])
 {
-  int sfd, s;
-  int efd;
-  struct epoll_event event;
-  struct epoll_event *events;
+    int sfd, s;
+    int efd;
+    struct epoll_event event;
+    struct epoll_event *events;
 
-  if (argc != 3)
+    if (argc != 3)
     {
-      fprintf (stderr, "Usage: %s [servername port]\n", argv[0]);
-      exit (EXIT_FAILURE);
+        fprintf (stderr, "Usage: %s [servername port]\n", argv[0]);
+        exit (EXIT_FAILURE);
     }
 
-  sfd = create_and_connect (argv[1], argv[2]);
-  if (sfd == -1)
-    abort ();
+    sfd = create_and_connect (argv[1], argv[2]);
+    if (sfd == -1)
+        abort ();
 
-  s = make_socket_non_blocking (sfd);
-  if (s == -1)
-    abort ();
+    s = make_socket_non_blocking (sfd);
+    if (s == -1)
+        abort ();
 
-  efd = epoll_create1 (0);
-  if (efd == -1)
+    efd = epoll_create1 (0);
+    if (efd == -1)
     {
-      perror ("epoll_create");
-      abort ();
+        perror ("epoll_create");
+        abort ();
     }
 
-  event.data.fd = sfd;
-  event.events = EPOLLIN | EPOLLOUT | EPOLLET;
-  s = epoll_ctl (efd, EPOLL_CTL_ADD, sfd, &event);
-  if (s == -1)
+    event.data.fd = sfd;
+    event.events = EPOLLIN | EPOLLOUT | EPOLLET;
+    s = epoll_ctl (efd, EPOLL_CTL_ADD, sfd, &event);
+    if (s == -1)
     {
-      perror ("epoll_ctl");
-      abort ();
+        perror ("epoll_ctl");
+        abort ();
     }
 
-  /* Buffer where events are returned */
-  events = (struct epoll_event*) calloc (MAXEVENTS, sizeof event);
+    /* Buffer where events are returned */
+    events = (struct epoll_event*) calloc (MAXEVENTS, sizeof event);
 
-  /* The event loop */
-  while (1)
+    /* The event loop */
+    while (1)
     {
-      int n, i;
+        int n, i;
 
-      n = epoll_wait (efd, events, MAXEVENTS, -1);
-      for (i = 0; i < n; i++)
-    {
-      if ((events[i].events & EPOLLERR) ||
-              (events[i].events & EPOLLHUP) ||
-              (!(  (events[i].events & EPOLLOUT) || (events[i].events & EPOLLIN) )))
+        n = epoll_wait (efd, events, MAXEVENTS, -1);
+        for (i = 0; i < n; i++)
         {
-              /* An error has occured on this fd, or the socket is not
-                 ready for reading (why were we notified then?) */
-          fprintf (stderr, "epoll error\n");
-          close (events[i].data.fd);
-          continue;
-        }
-
-          else {
-            if((events[i].events & EPOLLIN))
+            debug("event[%d/%d].events = %s\n", i, n, epoll_event_to_str(events[i].events));
+            if ((events[i].events & EPOLLERR) ||
+                (events[i].events & EPOLLHUP) ||
+                (!(  (events[i].events & EPOLLOUT) || (events[i].events & EPOLLIN) )))
             {
-              int done = 0;
-
-              ssize_t count = 0;
-              char buf[512] = "-------------";
-              ssize_t buflen = 0;
-              while (1)
-                {
-                  count += read (events[i].data.fd, buf+count, sizeof(buf)-count);
-                  if( buf[count-1] == '\0' )
-                    break;
-                }
-                  buflen = strlen(buf) + 1;
-                  printf("CLNT recv: %zu %s\n", buflen, buf);
-                  //sleep(1);
-
-              if (done)
-                {
-                  printf ("Closed connection on descriptor %d\n",
-                          events[i].data.fd);
-
-                  /* Closing the descriptor will make epoll remove it
-                     from the set of descriptors which are monitored. */
-                  close (events[i].data.fd);
-                }
+                /* An error has occured on this fd, or the socket is not
+                ready for reading (why were we notified then?) */
+                fprintf (stderr, "epoll error EPOLLERR\n");
+                close (events[i].data.fd);
+                continue;
             }
-            if((events[i].events & EPOLLOUT))
+
+            if ((events[i].events & EPOLLERR) ||
+                (events[i].events & EPOLLHUP) ||
+                (!(  (events[i].events & EPOLLOUT) || (events[i].events & EPOLLIN) )))
             {
+                if((events[i].events & EPOLLIN))
+                {
+                    int done = 0;
+
+                    ssize_t count = 0;
+                    char buf[512] = "-------------";
+                    ssize_t buflen = 0;
+                    while (1)
+                    {
+                        count += read (events[i].data.fd, buf+count, sizeof(buf)-count);
+                        if( buf[count-1] == '\0' )
+                            break;
+                    }
+                    buflen = strlen(buf) + 1;
+                    printf("CLNT recv: %zu %s\n", buflen, buf);
+                    //sleep(1);
+
+                    if (done)
+                    {
+                        printf ("Closed connection on descriptor %d\n", events[i].data.fd);
+
+                        /* Closing the descriptor will make epoll remove it
+                        from the set of descriptors which are monitored. */
+                        close (events[i].data.fd);
+                    }
+                }
+
+                if((events[i].events & EPOLLOUT))
+                {
                 // we can write data
 
-              /* We have data on the fd waiting to be read. Read and
+                /* We have data on the fd waiting to be read. Read and
                  display it. We must read whatever data is available
                  completely, as we are running in edge-triggered mode
                  and won't get a notification again for the same
                  data. */
-              int done = 0;
+                    int done = 0;
 
-              ssize_t count = 0;
-              char buf[512] = "TEST-c-00";  // TODO http GET /
-              ssize_t buflen = strlen(buf) + 1;
-              while (1)
-                {
-                  count += write (events[i].data.fd, buf+count, buflen-count);
-                  if (count < buflen)
-                  {
-                      if (errno == EAGAIN)
+                    ssize_t count = 0;
+                    char buf[512] = "TEST-c-00";  // TODO http GET /
+                    ssize_t buflen = strlen(buf) + 1;
+                    while (1)
+                    {
+                        count += write (events[i].data.fd, buf+count, buflen-count);
+                        if (count < buflen)
                         {
-                          perror ("write and EAGAIN");
+                            if (errno == EAGAIN)
+                            {
+                                perror ("write and EAGAIN");
+                            }
                         }
-                  }
-                  else if (count == buflen)
-                  {
-                      printf("CLNT sent: %zu %s\n", buflen, buf);
-                      //sleep(1);
-                      break;
-                  }
-                }
+                        else if (count == buflen)
+                        {
+                            printf("CLNT sent: %zu %s\n", buflen, buf);
+                            //sleep(1);
+                            break;
+                        }
+                    }
 
-              if (done)
-                {
-                  printf ("Closed connection on descriptor %d\n",
-                          events[i].data.fd);
+                    if (done)
+                    {
+                        printf ("Closed connection on descriptor %d\n", events[i].data.fd);
 
-                  /* Closing the descriptor will make epoll remove it
-                     from the set of descriptors which are monitored. */
-                  close (events[i].data.fd);
+                        /* Closing the descriptor will make epoll remove it
+                        from the set of descriptors which are monitored. */
+                        close (events[i].data.fd);
+                    }
                 }
             }
         }
-        }
     }
 
-  free (events);
+    free (events);
 
-  close (sfd);
+    close (sfd);
 
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 
