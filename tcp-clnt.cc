@@ -24,12 +24,28 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
-#include <errno.h>
+#include <map>
 
 #define DBG 1
 #include "common.cc"
 
 #define MAXEVENTS 64
+
+class EventData {
+public:
+    epoll_event event;
+    int recv_cnt;
+    int send_cnt;
+
+public:
+    EventData() {
+        memset(&event, 0x00, sizeof(event));
+        recv_cnt = 0;
+        send_cnt = 0;
+    }
+};
+
+std::map<int, EventData> evdata;
 
 char* epoll_event_to_str(int event) {
     static char buf[512];
@@ -57,7 +73,7 @@ main (int argc, char *argv[])
 {
     int sfd, s;
     int efd;
-    struct epoll_event event;
+    EventData evd1;
     struct epoll_event *events;
 
     if (argc != 3)
@@ -81,17 +97,19 @@ main (int argc, char *argv[])
         abort ();
     }
 
-    event.data.fd = sfd;
-    event.events = EPOLLIN | EPOLLOUT | EPOLLET;
-    s = epoll_ctl (efd, EPOLL_CTL_ADD, sfd, &event);
+    evd1.event.data.fd = sfd;
+    evd1.event.events = EPOLLIN | EPOLLOUT | EPOLLET;
+    s = epoll_ctl (efd, EPOLL_CTL_ADD, sfd, &evd1.event);
     if (s == -1)
     {
         perror ("epoll_ctl");
         abort ();
     }
 
+    evdata[sfd] = evd1;
+
     /* Buffer where events are returned */
-    events = (struct epoll_event*) calloc (MAXEVENTS, sizeof event);
+    events = (struct epoll_event*) calloc (MAXEVENTS, sizeof evd1.event);
 
     /* The event loop */
     while (1)
@@ -101,18 +119,18 @@ main (int argc, char *argv[])
         n = epoll_wait (efd, events, MAXEVENTS, -1);
         for (i = 0; i < n; i++)
         {
-            debug("event[%d/%d].events = %s\n", i, n, epoll_event_to_str(events[i].events));
+            debug("event[%d/%d] fd=%d events=%s\n", i, n, events[i].data.fd, epoll_event_to_str(events[i].events));
+            EventData& evd = evdata[events[i].data.fd];
+
             if (events[i].events & EPOLLERR)
             {
                 fprintf (stderr, "epoll error EPOLLERR\n");
                 close (events[i].data.fd);
-                continue;
             }
             if (events[i].events & EPOLLHUP)
             {
                 fprintf (stderr, "epoll error EPOLLHUP\n");
                 close (events[i].data.fd);
-                continue;
             }
 
             if((events[i].events & EPOLLIN))
@@ -127,7 +145,8 @@ main (int argc, char *argv[])
                         break;
                 }
                 buflen = strlen(buf) + 1;
-                printf("CLNT recv: %zu %s\n", buflen, buf);
+                evd.recv_cnt++;
+                printf("CLNT recv (%d): %zu %s\n", evd.recv_cnt, buflen, buf);
                 //sleep(1);
             }
 
@@ -149,7 +168,8 @@ main (int argc, char *argv[])
                     }
                     else if (count == buflen)
                     {
-                        printf("CLNT sent: %zu %s\n", buflen, buf);
+                        evd.send_cnt++;
+                        printf("CLNT sent (%d): %zu %s\n", evd.send_cnt, buflen, buf);
                         //sleep(1);
                         break;
                     }
