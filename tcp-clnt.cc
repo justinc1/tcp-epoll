@@ -117,8 +117,6 @@ main (int argc, char *argv[])
 
             if((events[i].events & EPOLLIN))
             {
-                int done = 0;
-
                 ssize_t count = 0;
                 char buf[512] = "-------------";
                 ssize_t buflen = 0;
@@ -131,28 +129,11 @@ main (int argc, char *argv[])
                 buflen = strlen(buf) + 1;
                 printf("CLNT recv: %zu %s\n", buflen, buf);
                 //sleep(1);
-
-                if (done)
-                {
-                    printf ("Closed connection on descriptor %d\n", events[i].data.fd);
-
-                    /* Closing the descriptor will make epoll remove it
-                    from the set of descriptors which are monitored. */
-                    close (events[i].data.fd);
-                }
             }
 
             if((events[i].events & EPOLLOUT))
             {
-            // we can write data
-
-            /* We have data on the fd waiting to be read. Read and
-             display it. We must read whatever data is available
-             completely, as we are running in edge-triggered mode
-             and won't get a notification again for the same
-             data. */
-                int done = 0;
-
+                // we can write data
                 ssize_t count = 0;
                 char buf[512] = "TEST-c-00";  // TODO http GET /
                 ssize_t buflen = strlen(buf) + 1;
@@ -173,18 +154,9 @@ main (int argc, char *argv[])
                         break;
                     }
                 }
-
-                if (done)
-                {
-                    printf ("Closed connection on descriptor %d\n", events[i].data.fd);
-
-                    /* Closing the descriptor will make epoll remove it
-                    from the set of descriptors which are monitored. */
-                    close (events[i].data.fd);
-                }
             }
-        }
-    }
+        }// for (i=0:n)
+    }//while 1
 
     free (events);
 
