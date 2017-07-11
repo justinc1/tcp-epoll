@@ -46,6 +46,7 @@ main (int argc, char *argv[])
   sfd = create_and_bind (argv[1]);
   if (sfd == -1)
     abort ();
+  debug("sfd=%d\n", sfd);
 
   s = make_socket_non_blocking (sfd);
   if (s == -1)
@@ -64,6 +65,7 @@ main (int argc, char *argv[])
       perror ("epoll_create");
       abort ();
     }
+  debug("efd=%d\n", efd);
 
   event.data.fd = sfd;
   event.events = EPOLLIN | EPOLLET;
@@ -92,6 +94,7 @@ main (int argc, char *argv[])
               /* An error has occured on this fd, or the socket is not
                  ready for reading (why were we notified then?) */
           fprintf (stderr, "epoll error\n");
+          debug("error on fd=%d, %s\n", events[i].data.fd, epoll_event_to_str(events[i].events));
           close (events[i].data.fd);
           continue;
         }
@@ -109,6 +112,7 @@ main (int argc, char *argv[])
 
                   in_len = sizeof in_addr;
                   infd = accept (sfd, &in_addr, &in_len);
+                  debug("accepted infd=%d on sfd=%d\n", infd, sfd);
                   if (infd == -1)
                     {
                       if ((errno == EAGAIN) ||
@@ -166,6 +170,7 @@ main (int argc, char *argv[])
                   ssize_t count;
                   char buf[512];
 
+                  debug("reading from fd=%d\n", events[i].data.fd);
                   count = read (events[i].data.fd, buf, sizeof buf);
                   if (count == -1)
                     {
@@ -203,6 +208,7 @@ main (int argc, char *argv[])
 
                   /* Closing the descriptor will make epoll remove it
                      from the set of descriptors which are monitored. */
+                  debug("closing fd=%d\n", events[i].data.fd);
                   close (events[i].data.fd);
                 }
             }

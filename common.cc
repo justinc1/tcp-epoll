@@ -17,11 +17,11 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <errno.h>
-
+#include <netinet/tcp.h>
 
 #define MAXEVENTS 64
 
-static int
+int
 make_socket_non_blocking (int sfd)
 {
   int flags, s;
@@ -52,7 +52,7 @@ create_and_bind (char *port)
   int s, sfd;
 
   memset (&hints, 0, sizeof (struct addrinfo));
-  hints.ai_family = AF_UNSPEC;     /* Return IPv4 and IPv6 choices */
+  hints.ai_family = AF_INET;     /* Return IPv4 and IPv6 choices */
   hints.ai_socktype = SOCK_STREAM; /* We want a TCP socket */
   hints.ai_flags = AI_PASSIVE;     /* All interfaces */
 
@@ -91,14 +91,49 @@ create_and_bind (char *port)
 }
 
 int
-create_and_connect (char *servername, char *port)
+client_create()
+//create_and_connect(char *servername, char *port)
+{
+  int s, cfd;
+  int flags;
+
+  cfd = socket (AF_INET, SOCK_STREAM, 0);
+  if (cfd == -1) {
+      fprintf (stderr, "socket() failed\n");
+      goto ERR;
+  }
+
+  flags = fcntl(cfd, F_GETFL, 0);
+  s = fcntl(cfd, F_SETFL, flags | O_NONBLOCK);
+  debug("fcntl F_SETFL s=%d\n", s);
+  if (s != 0) {
+    fprintf (stderr, "fcntl() failed\n");
+    goto ERR;
+  }
+
+  flags = 1;
+  s = setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+  if (s != 0) {
+    fprintf (stderr, "setsockopt() failed\n");
+    goto ERR;
+  }
+
+  return cfd;
+
+ERR:
+  close (cfd);
+  return -1;
+}
+
+int
+client_connect (int cfd, char *servername, char *port)
 {
   struct addrinfo hints;
   struct addrinfo *result, *rp;
-  int s, sfd;
+  int s;
 
   memset (&hints, 0, sizeof (struct addrinfo));
-  hints.ai_family = AF_UNSPEC;     /* Return IPv4 and IPv6 choices */
+  hints.ai_family = AF_INET;     /* Return IPv4 and IPv6 choices */
   hints.ai_socktype = SOCK_STREAM; /* We want a TCP socket */
   hints.ai_flags = AI_PASSIVE;     /* All interfaces */
 
@@ -111,20 +146,22 @@ create_and_connect (char *servername, char *port)
 
   for (rp = result; rp != NULL; rp = rp->ai_next)
     {
-      sfd = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-      if (sfd == -1)
-        continue;
 
-      s = connect (sfd, rp->ai_addr, rp->ai_addrlen);
-      if (s == 0)
-        {
-          /* We managed to connect successfully! */
-          break;
-        }
+      s = connect (cfd, rp->ai_addr, rp->ai_addrlen);
+      if (s != 0 && errno != EINPROGRESS)
+      {
+          goto ERR;
+      }
 
-      close (sfd);
+      /* We managed to connect successfully! */
+      goto OK;
     }
 
+ERR:
+  close (cfd);
+  cfd = -1;
+
+OK:
   if (rp == NULL)
     {
       fprintf (stderr, "Could not connect\n");
@@ -133,5 +170,26 @@ create_and_connect (char *servername, char *port)
 
   freeaddrinfo (result);
 
-  return sfd;
+  return cfd;
+}
+
+char* epoll_event_to_str(int event) {
+    static char buf[512];
+    memset(buf, 0x00, sizeof(buf));
+    int pos=0;
+    pos += snprintf(buf+pos, sizeof(buf)-pos, "0x%02x EPOLL{", event);
+    if (event & EPOLLIN) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " IN");
+    }
+    if (event & EPOLLOUT) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " OUT");
+    }
+    if (event & EPOLLERR) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " ERR");
+    }
+    if (event & EPOLLHUP) {
+        pos += snprintf(buf+pos, sizeof(buf)-pos, " HUP");
+    }
+    pos += snprintf(buf+pos, sizeof(buf)-pos, " }");
+    return buf;
 }
