@@ -2,3 +2,5 @@ tcp-srv
 tcp-srv.so
 tcp-clnt
 tcp-clnt.so
+tcp-both
+tcp-both.so

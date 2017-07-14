@@ -91,6 +91,39 @@ create_and_bind (char *port)
 }
 
 int
+server_create(char *port)
+{
+    int s, sfd = -1;
+
+    sfd = create_and_bind (port);
+    if (sfd == -1) {
+        goto ERR;
+    }
+    debug("sfd=%d\n", sfd);
+
+    s = make_socket_non_blocking (sfd);
+    if (s == -1) {
+        goto ERR;
+    }
+
+    s = listen (sfd, SOMAXCONN);
+    if (s == -1)
+    {
+        perror ("listen");
+        goto ERR;
+    }
+
+    return sfd;
+
+ERR:
+    if (sfd != -1) {
+        close(sfd);
+    }
+    sfd = -1;
+    return sfd;
+}
+
+int
 client_create()
 //create_and_connect(char *servername, char *port)
 {
@@ -102,6 +135,7 @@ client_create()
       fprintf (stderr, "socket() failed\n");
       goto ERR;
   }
+  debug("cfd=%d\n", cfd);
 
   flags = fcntl(cfd, F_GETFL, 0);
   s = fcntl(cfd, F_SETFL, flags | O_NONBLOCK);
@@ -152,6 +186,7 @@ client_connect (int cfd, char *servername, char *port)
       {
           goto ERR;
       }
+      debug("cfd=%d is connected\n", cfd);
 
       /* We managed to connect successfully! */
       goto OK;

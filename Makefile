@@ -10,6 +10,7 @@ CPPSO=$(CPP) -fPIC -shared
 
 EXEC=tcp-srv tcp-srv.so
 EXEC+=tcp-clnt tcp-clnt.so
+EXEC+=tcp-both tcp-both.so
 
 all: $(EXEC)
 
@@ -26,4 +27,8 @@ tcp-srv.so: tcp-srv.cc common.cc
 tcp-clnt: tcp-clnt.cc common.cc
 	$(CPP) -o $@ $<
 tcp-clnt.so: tcp-clnt.cc common.cc
+	$(CPPSO) -o $@ $<
+tcp-both: tcp-both.cc common.cc
+	$(CPP) -o $@ $<
+tcp-both.so: tcp-both.cc common.cc
 	$(CPPSO) -o $@ $<
